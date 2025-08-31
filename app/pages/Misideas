@@ -1,4 +1,0 @@
-# Página para ideas guardadas
-import streamlit as st
-
-st.title("Mis Ideas Guardadas")
