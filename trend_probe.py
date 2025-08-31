@@ -1,5 +1,4 @@
 import json
-from app.utils.parser import load_articles
 from app.utils.ai_filter import is_relevant_for_aura
 import os
 
