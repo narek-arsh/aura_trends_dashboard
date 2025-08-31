@@ -1,4 +1,6 @@
 import os
+print("🧪 GEMINI_API_KEY presente:", os.getenv("GEMINI_API_KEY") is not None)
+
 import json
 from app.utils.parser import load_feeds
 from app.utils.ai_filter import is_relevant_for_aura
