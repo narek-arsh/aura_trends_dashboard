@@ -1,6 +1,5 @@
 streamlit
+requests
 feedparser
 pyyaml
-requests
-beautifulsoup4
-python-dateutil
+google-generativeai==0.4.1
