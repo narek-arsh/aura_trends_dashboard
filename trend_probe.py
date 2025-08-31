@@ -23,7 +23,7 @@ with open(TRENDS_PATH, "r") as f:
     curated_articles = json.load(f)
 
 print("[+] Cargando feeds...")
-feeds_by_category = load_articles()
+feeds_by_category = load_feeds()
 
 print("[+] Recogiendo artículos...")
 all_articles = []
