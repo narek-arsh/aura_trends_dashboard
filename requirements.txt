@@ -1,0 +1,4 @@
+streamlit
+feedparser
+python-dateutil
+google-generativeai
