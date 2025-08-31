@@ -1,1 +1,1 @@
-from app.pages.Radar import *
+# App principal Streamlit

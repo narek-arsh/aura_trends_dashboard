@@ -1,5 +1,0 @@
-streamlit
-requests
-feedparser
-google-generativeai
-pyyaml

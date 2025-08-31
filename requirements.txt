@@ -1,5 +1,5 @@
 streamlit
 requests
 feedparser
+google-generativeai
 pyyaml
-google-generativeai==0.4.1
