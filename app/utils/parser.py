@@ -4,7 +4,7 @@ def load_feeds():
     import yaml
     with open("config/feeds.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    return config["feeds"]
+    return config
 
 def fetch_articles_from_feeds(feed_urls):
     articles = []
