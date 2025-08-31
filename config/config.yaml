@@ -1,0 +1,8 @@
+limits:
+  moda: 80
+  gastronomia: 80
+  arte_cultura: 60
+  lifestyle: 40
+  malaga: 40
+
+use_ai: true
