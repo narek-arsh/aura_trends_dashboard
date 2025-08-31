@@ -10,6 +10,7 @@ def fetch_articles_from_feeds(feeds_by_category):
     all_articles = []
 
     for category, feed_urls in feeds_by_category.items():
+        print(f"[+] Recogiendo artículos de categoría: {category}")
         for url in feed_urls:
             parsed_feed = feedparser.parse(url)
             for entry in parsed_feed.entries:
