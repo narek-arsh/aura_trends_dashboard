@@ -1,4 +1,5 @@
 # Parser de feeds RSSimport yaml
+import yaml
 import feedparser
 import hashlib
 
