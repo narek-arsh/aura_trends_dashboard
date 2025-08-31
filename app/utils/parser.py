@@ -1,33 +1,35 @@
-# Parser de feeds RSSimport yaml
-import yaml
 import feedparser
-import hashlib
-
-CONFIG_PATH = "config/feeds.yaml"
-
-def hash_article(entry):
-    raw = entry.get("title", "") + entry.get("link", "")
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-def parse_feed(url):
-    parsed = feedparser.parse(url)
-    return [{
-        "id": hash_article(entry),
-        "title": entry.get("title", "").strip(),
-        "summary": entry.get("summary", "").strip() if entry.get("summary") else "",
-        "link": entry.get("link", "").strip()
-    } for entry in parsed.entries]
+import yaml
+import os
 
 def load_feeds():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    print("[+] Cargando feeds...")
+    with open("config/feeds.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+    return config
 
-    feeds_by_category = {}
-    for category, urls in config.items():
-        category_articles = []
-        for url in urls:
-            articles = parse_feed(url)
-            category_articles.extend(articles)
-        feeds_by_category[category] = category_articles
+def fetch_articles_from_feeds(feeds_by_category, limit_per_category=60):
+    print("[+] Recogiendo artículos...")
+    all_articles = []
 
-    return feeds_by_category
+    for category, feeds in feeds_by_category.items():
+        count = 0
+        for feed_url in feeds:
+            if count >= limit_per_category:
+                break
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries:
+                if count >= limit_per_category:
+                    break
+                article = {
+                    "title": entry.get("title", ""),
+                    "link": entry.get("link", ""),
+                    "summary": entry.get("summary", ""),
+                    "published": entry.get("published", ""),
+                    "category": category,
+                }
+                all_articles.append(article)
+                count += 1
+
+    print(f"[+] Artículos obtenidos: {len(all_articles)}")
+    return all_articles
