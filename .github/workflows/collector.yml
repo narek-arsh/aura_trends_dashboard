@@ -3,14 +3,17 @@ name: Collect Trends
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8,18 * * *"  # Corre todos los días a las 08:00 y 18:00 UTC
+    - cron: "0 8,18 * * *"  # Ejecuta el script a las 08:00 y 18:00 UTC
 
 jobs:
   collect:
     runs-on: ubuntu-latest
 
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # ✅ Inyectamos el secreto como variable de entorno
+
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -22,5 +25,5 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Run script
+      - name: Run trend collector
         run: python trend_probe.py
