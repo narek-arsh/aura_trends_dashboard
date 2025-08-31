@@ -1,49 +1,38 @@
 import google.generativeai as genai
 import os
 import json
-import time
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# ⚙️ Configurar la API de Gemini
+api_key = os.getenv("GEMINI_API_KEY")
+print("🧪 GEMINI_API_KEY presente:", bool(api_key))
+genai.configure(api_key=api_key)
+
 model = genai.GenerativeModel("gemini-1.5-flash")
 
+# ✅ Evaluación de relevancia para el universo Aura
 def is_relevant_for_aura(article):
     prompt = f"""
-Eres un experto en lujo, hospitalidad de alto nivel y tendencias internacionales. Evalúa si esta noticia es útil para un Aura Host de un hotel ME by Meliá, cuya misión es conocer lo último en moda, arte, gastronomía, música, bienestar y eventos relevantes. 
+¿Este artículo podría interesar a un huésped de un hotel de lujo lifestyle como el ME by Meliá? Evalúa si aporta valor como experiencia, estilo, cultura, tendencia o curiosidad. 
+Devuelve únicamente "true" si lo consideras relevante, o "false" si no lo es.
 
-NOTICIA:
-Título: {article['title']}
-Resumen: {article.get('summary', 'Sin resumen disponible')}
-
-RESPONDE SOLO EN FORMATO JSON:
-{{
-  "relevante": true/false,
-  "motivo": "Breve frase explicando por qué sí o por qué no",
-  "resumen": "Resumen con lo esencial",
-  "idea_activacion": "Cómo se puede usar o mencionar esta noticia con un huésped ME"
-}}
-"""
+Título: {article.get('title', '')}
+Resumen: {article.get('summary', '')}
+Categoría: {article.get('category', '')}
+Fuente: {article.get('link', '')}
+    """.strip()
 
     try:
         response = model.generate_content(prompt)
-        time.sleep(5)  # ✅ Espera entre peticiones para no agotar el límite gratuito
+        raw = response.text.strip().lower()
 
-        raw_text = response.text.strip()
-
-        # Intentar parsear el JSON generado por la IA
-        result = json.loads(raw_text)
-
-        return {
-            "relevante": result.get("relevante", False),
-            "motivo": result.get("motivo", ""),
-            "resumen": result.get("resumen", ""),
-            "idea_activacion": result.get("idea_activacion", "")
-        }
+        # 🧠 Asegurar salida válida
+        if "true" in raw:
+            return True
+        elif "false" in raw:
+            return False
+        else:
+            raise ValueError(f"Respuesta inesperada: {raw}")
 
     except Exception as e:
         print(f"[!] Error al parsear respuesta IA: {e}")
-        return {
-            "relevante": False,
-            "motivo": "Error de IA",
-            "resumen": "",
-            "idea_activacion": ""
-        }
+        return False
