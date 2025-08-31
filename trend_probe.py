@@ -1,70 +1,66 @@
-import feedparser
-import yaml
-import hashlib
 import json
-import os
-from datetime import datetime
-from bs4 import BeautifulSoup
-from dateutil import parser as dateparser
+from pathlib import Path
+from app.utils.parser import load_feeds, parse_all_feeds
+from app.utils.ai_filter import is_relevant_for_aura
 
-def clean_summary(html):
-    return BeautifulSoup(html, "html.parser").get_text()
+# Paths
+CURATED_PATH = Path("data/curated.json")
+TRENDS_PATH = Path("data/trends.json")
 
-def get_image(entry):
-    media = entry.get("media_content", [])
-    if media and "url" in media[0]:
-        return media[0]["url"]
-    return entry.get("image", None)
+# Cargar memoria de noticias ya procesadas
+def load_curated_ids():
+    if CURATED_PATH.exists():
+        with open(CURATED_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return set(item["id"] for item in data)
+    return set()
 
-def load_config(path="config.yaml"):
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+def save_curated(new_entries):
+    if CURATED_PATH.exists():
+        with open(CURATED_PATH, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    else:
+        existing = []
+    combined = existing + new_entries
+    with open(CURATED_PATH, "w", encoding="utf-8") as f:
+        json.dump(combined, f, indent=2, ensure_ascii=False)
 
-def is_valid(entry, category_config, global_keywords):
-    title = entry.get("title", "").lower()
-    summary = clean_summary(entry.get("summary", "")).lower()
-    content = title + " " + summary
+def save_trends(entries):
+    with open(TRENDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2, ensure_ascii=False)
 
-    if not any(kw in content for kw in global_keywords):
-        return False
-    if "include" in category_config["keywords"]:
-        if not any(kw in content for kw in category_config["keywords"]["include"]):
-            return False
-    if "exclude" in category_config["keywords"]:
-        if any(kw in content for kw in category_config["keywords"]["exclude"]):
-            return False
-    return True
+def main():
+    print("[+] Cargando feeds...")
+    feeds = load_feeds()
 
-def generate_id(link):
-    return hashlib.md5(link.encode("utf-8")).hexdigest()
+    print("[+] Recogiendo artículos...")
+    articles = parse_all_feeds(feeds, per_category_limit=60)  # Máx por categoría
 
-def collect_trends(config_path="config.yaml"):
-    config = load_config(config_path)
-    results = []
+    print(f"[+] Artículos obtenidos: {len(articles)}")
 
-    for category, cat_data in config["categories"].items():
-        for feed_url in cat_data["feeds"]:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries:
-                if not is_valid(entry, cat_data, config["global_keywords"]["include"]):
-                    continue
-                item = {
-                    "id": generate_id(entry.link),
-                    "category": category,
-                    "title": entry.title,
-                    "link": entry.link,
-                    "summary": clean_summary(entry.get("summary", "")),
-                    "published": str(dateparser.parse(entry.get("published", str(datetime.utcnow())))),
-                    "image": get_image(entry),
-                    "saved": False,
-                    "score": 0,
-                    "why_it_matters": "",
-                    "activation_ideas": ""
-                }
-                results.append(item)
+    curated_ids = load_curated_ids()
+    new_curated = []
+    trends = []
 
-    with open("data/trends.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+    for article in articles:
+        if article["id"] in curated_ids:
+            continue
+
+        enriched = is_relevant_for_aura(article)
+        if enriched:
+            print(f"[✓] Aprobada: {article['title'][:60]}...")
+            article.update(enriched)
+            trends.append(article)
+            new_curated.append({"id": article["id"]})
+        else:
+            print(f"[✗] Descartada: {article['title'][:60]}...")
+
+    if trends:
+        save_trends(trends)
+        save_curated(new_curated)
+        print(f"[✔] Noticias guardadas: {len(trends)}")
+    else:
+        print("[!] No hubo noticias relevantes.")
 
 if __name__ == "__main__":
-    collect_trends()
+    main()
