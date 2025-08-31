@@ -1,0 +1,1 @@
+# Lógica de filtrado e IA con Gemini

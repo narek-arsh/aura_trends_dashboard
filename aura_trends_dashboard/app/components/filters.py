@@ -1,0 +1,1 @@
+# Filtros por categoría

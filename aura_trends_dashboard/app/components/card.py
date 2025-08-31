@@ -1,0 +1,1 @@
+# Lógica de visualización de tarjetas de noticias
