@@ -1,82 +1,59 @@
+import os
 import json
 from app.utils.parser import load_feeds, fetch_articles_from_feeds
 from app.utils.ai_filter import is_relevant_for_aura
-import os
 
-CURATED_PATH = "data/curated.json"
-TRENDS_PATH = "data/trends.json"
+CURATED_FILE = "data/curated.json"
+TRENDS_FILE = "data/trends.json"
 
-# Crear archivos si no existen
-if not os.path.exists(CURATED_PATH):
-    with open(CURATED_PATH, "w") as f:
-        json.dump([], f)
+# Cargar artículos ya procesados
+if os.path.exists(CURATED_FILE):
+    with open(CURATED_FILE, "r", encoding="utf-8") as f:
+        curated_articles = json.load(f)
+else:
+    curated_articles = {}
 
-if not os.path.exists(TRENDS_PATH):
-    with open(TRENDS_PATH, "w") as f:
-        json.dump([], f)
-
-# Cargar artículos ya curados (para no repetir)
-with open(CURATED_PATH, "r") as f:
-    curated_ids = set(json.load(f))
-
-# Cargar artículos ya seleccionados como tendencia
-with open(TRENDS_PATH, "r") as f:
-    curated_articles = json.load(f)
+if os.path.exists(TRENDS_FILE):
+    with open(TRENDS_FILE, "r", encoding="utf-8") as f:
+        trends = json.load(f)
+else:
+    trends = []
 
 print("[+] Cargando feeds...")
 feeds_by_category = load_feeds()
 
 print("[+] Recogiendo artículos...")
-all_articles = []
-for category, articles in feeds_by_category.items():
-    for article in articles:
-        article["category"] = category
-        all_articles.append(article)
+articles = fetch_articles_from_feeds(feeds_by_category)
+print(f"[+] Artículos obtenidos: {len(articles)}")
 
-print(f"[+] Artículos obtenidos: {len(all_articles)}")
-
-# Procesar artículos
-for article in all_articles:
+for article in articles:
     article_id = article["id"]
+    title = article.get("title", "Sin título")
 
-    if article_id in curated_ids:
-        print(f"[✓] Ya procesado: {article['title'][:60]}")
+    if article_id in curated_articles:
+        print(f"[=] Ya procesado: {title}")
         continue
 
-    print(f"[IA] Evaluando: {article['title'][:60]}")
-
+    print(f"[IA] Evaluando: {title}")
     try:
         result = is_relevant_for_aura(article)
-
-        if result["relevante"]:
-            print(f"[✔] Añadido: {article['title'][:60]}")
-
-            enriched_article = {
-                "id": article_id,
-                "title": article["title"],
-                "link": article["link"],
-                "summary": result["resumen"],
-                "category": article["category"],
-                "idea_activacion": result["idea_activacion"],
-                "motivo": result["motivo"]
-            }
-
-            curated_articles.append(enriched_article)
-
-            # ✅ Guardar avances parciales
-            with open(TRENDS_PATH, "w") as f:
-                json.dump(curated_articles, f, ensure_ascii=False, indent=2)
-
+        if result:
+            trends.append(result)
+            curated_articles[article_id] = True
+            print(f"[✓] Aprobado: {title}")
         else:
-            print(f"[✗] Descartada: {article['title'][:60]}")
+            curated_articles[article_id] = False
+            print(f"[✗] Descartada: {title}")
 
     except Exception as e:
-        print(f"[!] Error de IA: {e}")
-        continue  # saltar al siguiente
+        print(f"[!] Error con el artículo '{title}': {e}")
+        break  # Cortamos para evitar perder todo si se agotó el límite
 
-    # ✅ Marcar como procesado, pase lo que pase
-    curated_ids.add(article_id)
-    with open(CURATED_PATH, "w") as f:
-        json.dump(list(curated_ids), f, ensure_ascii=False, indent=2)
+# Guardar resultados
+with open(CURATED_FILE, "w", encoding="utf-8") as f:
+    json.dump(curated_articles, f, ensure_ascii=False, indent=2)
 
-print("[✓] Proceso finalizado.")
+with open(TRENDS_FILE, "w", encoding="utf-8") as f:
+    json.dump(trends, f, ensure_ascii=False, indent=2)
+
+print("[✅] Proceso completado")
