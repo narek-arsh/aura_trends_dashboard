@@ -27,7 +27,7 @@ articles = fetch_articles_from_feeds(feeds_by_category)
 print(f"[+] Artículos obtenidos: {len(articles)}")
 
 for article in articles:
-    article_id = article["id"]
+    article_id = f"{article.get('title','')}|{article.get('link','')}|{article.get('published','')}"
     title = article.get("title", "Sin título")
 
     if article_id in curated_articles:
