@@ -1,31 +1,30 @@
 import google.generativeai as genai
 import os
-import json
 
-# ⚙️ Configurar la API de Gemini
+# Configurar Gemini con API key del entorno
 api_key = os.getenv("GEMINI_API_KEY")
 print("🧪 GEMINI_API_KEY presente:", bool(api_key))
 genai.configure(api_key=api_key)
 
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# ✅ Evaluación de relevancia para el universo Aura
 def is_relevant_for_aura(article):
     prompt = f"""
-¿Este artículo podría interesar a un huésped de un hotel de lujo lifestyle como el ME by Meliá? Evalúa si aporta valor como experiencia, estilo, cultura, tendencia o curiosidad. 
-Devuelve únicamente "true" si lo consideras relevante, o "false" si no lo es.
+¿Este artículo podría interesar a un huésped de un hotel de lujo lifestyle como el ME by Meliá?
+Evalúa si aporta valor como experiencia, estilo, cultura, tendencia o curiosidad.
+
+Devuelve únicamente: true o false.
 
 Título: {article.get('title', '')}
 Resumen: {article.get('summary', '')}
 Categoría: {article.get('category', '')}
 Fuente: {article.get('link', '')}
-    """.strip()
+""".strip()
 
     try:
         response = model.generate_content(prompt)
         raw = response.text.strip().lower()
 
-        # 🧠 Asegurar salida válida
         if "true" in raw:
             return True
         elif "false" in raw:
