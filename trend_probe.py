@@ -1,4 +1,5 @@
 import json
+from app.utils.parser import load_feeds
 from app.utils.ai_filter import is_relevant_for_aura
 import os
 
