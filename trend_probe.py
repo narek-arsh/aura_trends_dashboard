@@ -1,72 +1,62 @@
 import os
 import json
+import time
 from app.utils.parser import load_feeds, fetch_articles_from_feeds
 from app.utils.ai_filter import is_relevant_for_aura
-import google.api_core.exceptions
+from app.utils.utils import parse_gemini_response
 
 CURATED_PATH = "data/curated.json"
 
-print("[+] Cargando feeds...")
-feeds_by_category = load_feeds()
-
-print("[+] Recogiendo artículos...")
-articles = []
-for category, urls in feeds_by_category.items():
-    print(f"[+] Recogiendo artículos de categoría: {category}")
-    category_articles = fetch_articles_from_feeds(urls)
-    for article in category_articles:
-        article["category"] = category
-    articles.extend(category_articles)
-
-print(f"[+] Artículos obtenidos: {len(articles)}")
-
-# Cargar los artículos ya procesados previamente
+# 💾 Cargar artículos ya analizados
 if os.path.exists(CURATED_PATH):
     with open(CURATED_PATH, "r", encoding="utf-8") as f:
         curated_articles = json.load(f)
 else:
     curated_articles = {}
 
-trends = []
+print("[+] Cargando feeds...")
+feeds_by_category = load_feeds()
 
-for article in articles:
-    article_id = f"{article.get('title','')}|{article.get('link','')}|{article.get('published','')}"
-    title = article.get("title", "Sin título")
+print("[+] Recogiendo artículos...")
+all_articles = []
+
+for category, urls in feeds_by_category.items():
+    print(f"[+] Recogiendo artículos de categoría: {category}")
+    category_articles = fetch_articles_from_feeds(urls)
+    for article in category_articles:
+        article["category"] = category
+    all_articles.extend(category_articles)
+
+print(f"[+] Artículos obtenidos: {len(all_articles)}")
+
+# ⚙️ Evaluar con IA
+for i, article in enumerate(all_articles):
+    article_id = article.get("id")
+    if not article_id:
+        print(f"[!] Artículo sin ID, omitido: {article.get('title', '')}")
+        continue
 
     if article_id in curated_articles:
-        print(f"[·] Ya procesado: {title}")
+        print(f"[•] Ya evaluado: {article['title'][:60]}")
         continue
-
-    print(f"[IA] Evaluando: {title}")
 
     try:
+        print(f"[IA] Evaluando: {article['title'][:80]}")
         result = is_relevant_for_aura(article)
-        curated_articles[article_id] = result
-        if result:
-            trends.append(result)
-            print(f"[✓] Aprobado: {title[:50]}")
-        else:
-            print(f"[✗] Descartada: {title[:50]}")
 
-    except google.api_core.exceptions.ResourceExhausted as e:
-        print(f"[‼] Se agotaron los créditos de Gemini: {e}")
-        print("[💾] Guardando artículos procesados hasta ahora...")
-        with open(CURATED_PATH, "w", encoding="utf-8") as f:
-            json.dump(curated_articles, f, indent=2, ensure_ascii=False)
-        break
+        if not isinstance(result, bool):
+            raise ValueError("Respuesta IA malformada")
+
+        curated_articles[article_id] = result
 
     except Exception as e:
-        print(f"[!] Error con el artículo '{title}': {e}")
-        curated_articles[article_id] = False
-        continue
+        print(f"[!] Error con el artículo '{article.get('title', '')}': {e}")
+        curated_articles[article_id] = False  # Lo marcamos como no relevante
 
-# Guardar resultados finales si no hubo error de crédito
-else:
-    print("[💾] Guardando artículos procesados...")
+    # Guardar progreso parcial
     with open(CURATED_PATH, "w", encoding="utf-8") as f:
-        json.dump(curated_articles, f, indent=2, ensure_ascii=False)
+        json.dump(curated_articles, f, ensure_ascii=False, indent=2)
 
-    with open("data/trends.json", "w", encoding="utf-8") as f:
-        json.dump(trends, f, indent=2, ensure_ascii=False)
+    time.sleep(5)  # Para evitar rate limits
 
-    print("[✅] Proceso completado")
+print("[✅] Proceso completado")
