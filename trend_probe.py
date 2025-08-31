@@ -9,7 +9,7 @@ DATA_DIR = "data"
 CURATED_PATH = os.path.join(DATA_DIR, "curated.json")
 TRENDS_PATH = os.path.join(DATA_DIR, "trends.json")
 
-# Crear carpeta si no existe
+# Crear carpeta si no existiese
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Cargar feeds
