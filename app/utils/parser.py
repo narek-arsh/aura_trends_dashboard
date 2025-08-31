@@ -1,24 +1,25 @@
 import feedparser
+import yaml
 
 def load_feeds():
-    import yaml
     with open("config/feeds.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    return config
+    return config["feeds"]
 
-def fetch_articles_from_feeds(feed_urls):
-    articles = []
+def fetch_articles_from_feeds(feeds_by_category):
+    all_articles = []
 
-    for feed_url in feed_urls:
-        parsed = feedparser.parse(feed_url)
-        for entry in parsed.entries:
-            article = {
-                "id": entry.get("id", entry.get("link")),
-                "title": entry.get("title", ""),
-                "link": entry.get("link", ""),
-                "published": entry.get("published", ""),
-                "summary": entry.get("summary", ""),
-            }
-            articles.append(article)
+    for category, feed_urls in feeds_by_category.items():
+        for url in feed_urls:
+            parsed_feed = feedparser.parse(url)
+            for entry in parsed_feed.entries:
+                article = {
+                    "id": entry.get("id") or entry.get("link"),
+                    "title": entry.get("title", ""),
+                    "summary": entry.get("summary", ""),
+                    "link": entry.get("link", ""),
+                    "category": category,
+                }
+                all_articles.append(article)
 
-    return articles
+    return all_articles
