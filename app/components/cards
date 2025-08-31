@@ -1,0 +1,4 @@
+# Componente visual de tarjeta
+
+def render_card(article):
+    return None  # Aquí irá el renderizado
