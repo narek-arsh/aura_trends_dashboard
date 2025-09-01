@@ -54,7 +54,8 @@ def render_article(article: dict):
         col_img, col_txt = st.columns([1, 2], gap="large")
         with col_img:
             if img_url:
-                st.image(img_url, use_container_width=True)  # ← actualizado
+                # 👇 corregido: ahora con use_container_width
+                st.image(img_url, use_container_width=True)
         with col_txt:
             if short_text:
                 st.write(short_text)
