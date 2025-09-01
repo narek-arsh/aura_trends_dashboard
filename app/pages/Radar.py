@@ -16,7 +16,6 @@ def _load_trends(path: str = "data/trends.json"):
         return []
 
 def _columns(spec):
-    """Fallback para versiones de Streamlit sin 'gap' en st.columns."""
     try:
         return st.columns(spec, gap="large")
     except TypeError:
@@ -26,20 +25,20 @@ def main():
     st.title("Radar")
     render_weather()
 
-    selected = category_filter()
+    selected = category_filter()  # siempre string por filters.py
     if selected == "guardadas":
         articles = get_saved()
     else:
         articles = _load_trends()
-        if selected and selected != "todas":
-            s = selected.lower()
+        if selected != "todas":
+            s = (selected or "todas").lower()
             articles = [a for a in articles if (a.get("category") or "").lower() == s]
 
     if not articles:
         st.info("Aún no hay artículos para mostrar. Cuando el colector procese nuevos, aparecerán aquí.")
         return
 
-    left, right = _columns(2)  # ← usa helper con fallback
+    left, right = _columns(2)
     for i, art in enumerate(articles):
         with (left if i % 2 == 0 else right):
             render_article(art)
