@@ -3,22 +3,34 @@ name: Collect Trends
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8,18 * * *"
+    - cron: "0 6 * * *"   # cada día a las 06:00 UTC (cámbialo si quieres)
+
+permissions:
+  contents: write   # necesario para git push
 
 jobs:
   collect:
     runs-on: ubuntu-latest
 
     env:
-      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}   # "KEY1,KEY2,KEY3"
-      GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}    # (opcional: fallback)
-      # (Opcional) Ajusta ritmo:
-      # GEMINI_SECONDS_PER_CALL: "10"     # 10s por petición y por clave (muy conservador)
-      # GEMINI_RPM_PER_KEY: "6"           # 6 peticiones/minuto por clave
+      # 🔑 Claves (rotación por comas: KEY1,KEY2,KEY3). Mantén GEMINI_API_KEY como fallback si quieres.
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+      GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+
+      # 🐢 Ritmo MUY prudente (ajusta aquí sin tocar código)
+      GEMINI_SECONDS_PER_CALL: "12"   # 12s por petición y por clave ≈ 5 rpm/clave
+      # (alternativa) GEMINI_RPM_PER_KEY: "5"
+
+      # 📉 Límites conservadores (puedes subirlos cuando todo esté estable)
+      PER_CATEGORY_LIMIT: "30"
+      MAX_TOTAL_ARTICLES: "120"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -31,3 +43,23 @@ jobs:
 
       - name: Run trend collector
         run: python trend_probe.py
+
+      # Siempre sube los JSON como artifact descargable desde la página del run
+      - name: Upload JSONs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aura-trends-json
+          path: data/*.json
+          if-no-files-found: warn
+
+      # Commit & push sólo si hay cambios (evita commits vacíos)
+      - name: Commit & push changes if any
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/curated.json data/trends.json || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Update trends $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
+          else
+            echo "No hay cambios que commitear."
