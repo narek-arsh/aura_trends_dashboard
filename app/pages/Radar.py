@@ -1,33 +1,36 @@
-import streamlit as st
-from app.components.weather import render_weather
-from app.components.filters import render_filters
-from app.components.card import render_cards
 import json
-import os
+import streamlit as st
+from app.components.filters import category_filter
+from app.components.card import render_article
+from app.components.weather import render_weather  # <- ahora existe
 
-st.set_page_config(page_title="Radar de Tendencias", layout="wide")
+def _load_trends(path: str = "data/trends.json"):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f) or []
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
 
-render_weather()
-selected_category = render_filters()
+def main():
+    st.title("Radar")
 
-# Cargar noticias
-data_path = "data/trends.json"
-if os.path.exists(data_path):
-    with open(data_path, "r", encoding="utf-8") as f:
-        all_trends = json.load(f)
-else:
-    all_trends = []
+    # Widget tiempo en el encabezado
+    render_weather()
 
-# Filtro
-if selected_category and selected_category != "Todas":
-    filtered = [item for item in all_trends if item.get("categoria") == selected_category]
-else:
-    filtered = all_trends
+    selected = category_filter()
+    articles = _load_trends()
 
-# Tarjetas en dos columnas
-col1, col2 = st.columns(2)
+    if selected:
+        s = selected.lower()
+        articles = [a for a in articles if (a.get("category") or "").lower() == s]
 
-for i, trend in enumerate(filtered):
-    with col1 if i % 2 == 0 else col2:
-        render_cards(trend)
-# Página principal con el radar de noticias
+    if not articles:
+        st.info("Aún no hay artículos para mostrar. Cuando el colector procese nuevos, aparecerán aquí.")
+        return
+
+    left, right = st.columns(2, gap="large")
+    for i, art in enumerate(articles):
+        with (left if i % 2 == 0 else right):
+            render_article(art)
+            st.markdown("---")
