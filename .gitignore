@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Entornos
+.env
+.venv/
+
+# Data: sube solo curated/trends
+data/*
+!data/curated.json
+!data/trends.json
