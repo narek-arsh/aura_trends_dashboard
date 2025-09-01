@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from app.utils.parser import load_feeds, fetch_articles_from_feeds
-from app.utils.ai_filter import is_relevant_for_aura
+from app.utils.ai_filter import is_relevant_for_aura, enrich_article_fields
 from google.api_core.exceptions import ResourceExhausted
 
 DATA_DIR = "data"
@@ -58,6 +58,7 @@ if not feeds_by_category:
 print(f"[+] Recogiendo artículos (por categoría: {PER_CATEGORY_LIMIT})…", flush=True)
 articles = fetch_articles_from_feeds(feeds_by_category, per_category=PER_CATEGORY_LIMIT)
 
+# Limitar total si se desea
 if len(articles) > MAX_TOTAL_ARTICLES:
     articles = articles[:MAX_TOTAL_ARTICLES]
 
@@ -85,6 +86,19 @@ for idx, art in enumerate(articles, start=1):
         is_rel = is_relevant_for_aura(art)
         curated[art_id] = bool(is_rel)
         if is_rel:
+            # Enriquecer con Gemini (why + ideas)
+            enrich = {}
+            try:
+                enrich = enrich_article_fields(art) or {}
+            except ResourceExhausted:
+                print(f"[{idx}/{total}] [⛔] Cuota agotada durante enriquecimiento.", flush=True)
+                _save_json(CURATED_PATH, curated)
+                _save_json(TRENDS_PATH, trends)
+                sys.exit(0)
+            if enrich.get("why_it_matters"):
+                art["why_it_matters"] = enrich["why_it_matters"]
+            if enrich.get("activation_ideas"):
+                art["activation_ideas"] = enrich["activation_ideas"]
             trends.append(art)
             print(f"[{idx}/{total}] [✓] Relevante", flush=True)
         else:
@@ -92,7 +106,7 @@ for idx, art in enumerate(articles, start=1):
         procesados_nuevos += 1
 
     except ResourceExhausted as e:
-        print(f"[{idx}/{total}] [⛔] Cuota de Gemini agotada en todas las claves: {e}", flush=True)
+        print(f"[{idx}/{total}] [⛔] Sin claves válidas/cuota: {e}", flush=True)
         print("[💾] Guardando progreso y saliendo…", flush=True)
         _save_json(CURATED_PATH, curated)
         _save_json(TRENDS_PATH, trends)
@@ -102,9 +116,11 @@ for idx, art in enumerate(articles, start=1):
         print(f"[{idx}/{total}] [!] Error con el artículo: {e}", flush=True)
         curated[art_id] = False
 
+    # Guardado incremental
     _save_json(CURATED_PATH, curated)
     _save_json(TRENDS_PATH, trends)
 
+# Resumen
 print(f"[ℹ] Resumen guardado: curated={len(curated)} entradas, trends={len(trends)} relevantes", flush=True)
 print(f"[ℹ] Ejemplos curated (hasta 3): {list(curated)[:3]}", flush=True)
 print(f"[ℹ] Ejemplos trends (hasta 1): {trends[:1]}", flush=True)
