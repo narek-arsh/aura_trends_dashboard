@@ -1,5 +1,9 @@
-streamlit
-requests
-feedparser
-google-generativeai
-pyyaml
+# Core
+google-generativeai>=0.7.2
+google-api-core>=2.19.0
+feedparser>=6.0.10
+PyYAML>=6.0.1
+
+# Utilidades / Front (opcional según uses)
+requests>=2.31.0
+streamlit>=1.32.0
