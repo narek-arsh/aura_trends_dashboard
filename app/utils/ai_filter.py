@@ -29,7 +29,7 @@ def _configure_with_key(key: str):
     genai.configure(api_key=key)
 
 def _pause_seconds() -> float:
-    # Fijamos 12s para ir muy por debajo del límite
+    # Fijamos 12s para ir muy por debajo del límite por minuto
     return 12.0
 
 def _is_invalid_key_error(err: Exception) -> bool:
@@ -41,6 +41,40 @@ def _is_invalid_key_error(err: Exception) -> bool:
     )
 
 # ─────────────────────────────────────────────────────────────
+# Detección de tipo de 429 (minuto vs día) y retry_delay
+# ─────────────────────────────────────────────────────────────
+_PER_MINUTE_HINTS = (
+    "RequestsPerMinute", "PerMinute", "PerMinutePerProject", "PerMinutePerProjectPerModel"
+)
+_PER_DAY_HINTS = (
+    "RequestsPerDay", "PerDay", "PerDayPerProject"
+)
+
+_RETRY_DELAY_RX = re.compile(r"retry_delay\s*\{\s*seconds:\s*(\d+)", re.IGNORECASE)
+def _classify_429(err: Exception):
+    """
+    Devuelve ('minute'|'day'|'unknown', retry_delay_seconds|None)
+    """
+    text = str(err)
+    # retry_delay seconds
+    m = _RETRY_DELAY_RX.search(text)
+    retry_delay = int(m.group(1)) if m else None
+
+    # mira quota_metric:
+    # e.g. quota_metric: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+    if any(h in text for h in _PER_MINUTE_HINTS):
+        return "minute", retry_delay
+    if any(h in text for h in _PER_DAY_HINTS):
+        return "day", retry_delay
+    return "unknown", retry_delay
+
+def _backoff_sleep(seconds: float):
+    # Límite razonable
+    seconds = max(1.0, min(float(seconds), 300.0))
+    print(f"⏳ Backoff {seconds:.0f}s…", flush=True)
+    time.sleep(seconds)
+
+# ─────────────────────────────────────────────────────────────
 # Llamada base a Gemini
 # ─────────────────────────────────────────────────────────────
 def _try_generate(prompt: str) -> str:
@@ -50,36 +84,69 @@ def _try_generate(prompt: str) -> str:
 
 def _generate_single_pass(prompt: str) -> str:
     """
-    Prueba cada clave en orden, máximo una vez.
-    Si todas fallan → ResourceExhausted.
+    Prueba cada clave en orden (máx. una vuelta), con reintentos en 429 por minuto.
+    - 429 PerMinute → esperar retry_delay (o ~65s) y reintentar la misma clave (hasta 2 veces por clave).
+    - 429 PerDay → marcar la clave como agotada para hoy y pasar a la siguiente.
+    - 429 unknown → backoff corto (30s) y reintentar una vez.
+    - Otras excepciones transitorias (timeout/503) → intentar siguiente clave.
+    - Si ninguna clave sirve → ResourceExhausted.
     """
     if not _API_KEYS:
         raise ResourceExhausted("No valid API keys configured.")
     pause = _pause_seconds()
+    daily_exhausted = set()
 
     for idx, key in enumerate(_API_KEYS, start=1):
+        if key in daily_exhausted:
+            continue
+
         _configure_with_key(key)
         if idx > 1:
-            time.sleep(1.0)  # respiro al cambiar de clave
-        try:
-            text = _try_generate(prompt)
-            time.sleep(pause)
-            return text
-        except ResourceExhausted:
-            print(f"⛽ Key #{idx} quota exhausted (429). Trying next…")
-            continue
-        except (DeadlineExceeded, ServiceUnavailable) as e:
-            print(f"🌐 Transient error with key #{idx}: {e}. Trying next…")
-            continue
-        except Exception as e:
-            if _is_invalid_key_error(e):
-                print(f"⛔ Key #{idx} invalid/expired. Skipping…")
-                continue
-            print(f"❗ Error genérico con clave #{idx}: {e} → devolviendo vacío")
-            time.sleep(pause)
-            return ""
+            time.sleep(1.0)
 
-    raise ResourceExhausted("All keys exhausted or invalid for this article.")
+        # Hasta 2 intentos por clave si el 429 es por minuto
+        attempts_left = 2
+        while attempts_left > 0:
+            try:
+                text = _try_generate(prompt)
+                time.sleep(pause)
+                return text
+
+            except ResourceExhausted as e:
+                scope, retry_delay = _classify_429(e)
+                if scope == "minute":
+                    # backoff recomendado o ~65s y reintentamos MISMA clave
+                    wait_s = retry_delay + 2 if (retry_delay and retry_delay > 0) else 65
+                    print(f"⛽ Key #{idx} 429 PerMinute. Esperando {wait_s}s y reintentando misma clave…", flush=True)
+                    _backoff_sleep(wait_s)
+                    attempts_left -= 1
+                    continue  # reintenta misma clave
+
+                if scope == "day":
+                    print(f"⛽ Key #{idx} 429 PerDay. Marcada como agotada para hoy. Pasando a la siguiente…", flush=True)
+                    daily_exhausted.add(key)
+                    break  # salir del while → pasar a siguiente clave
+
+                # unknown 429 → backoff corto y un reintento
+                print(f"⛽ Key #{idx} 429 (scope desconocido). Backoff 30s y reintento…", flush=True)
+                _backoff_sleep(30)
+                attempts_left -= 1
+                continue
+
+            except (DeadlineExceeded, ServiceUnavailable) as e:
+                print(f"🌐 Transient error con key #{idx}: {e}. Probando siguiente clave…", flush=True)
+                break  # pasa a siguiente clave
+
+            except Exception as e:
+                if _is_invalid_key_error(e):
+                    print(f"⛔ Key #{idx} inválida/expirada. Saltando…", flush=True)
+                    break
+                print(f"❗ Error genérico con key #{idx}: {e} → devolviendo vacío", flush=True)
+                time.sleep(pause)
+                return ""
+
+    # Si llegamos aquí, ninguna clave pudo responder
+    raise ResourceExhausted("All keys exhausted (minute and/or daily) for this article.")
 
 # ─────────────────────────────────────────────────────────────
 # Helpers de parsing
