@@ -1,16 +1,12 @@
-import streamlit as st
+import time, streamlit as st
 
 def render_weather():
-    """Widget del tiempo para Málaga (iframe)."""
+    bust = int(time.time())  # cambia cada deploy; si prefieres fijo, usa ?v=2
     st.markdown(
-        """
-        <iframe src="https://narek-arsh.github.io/malaga-weather-widget/"
-                style="width:100%; height:140px; border:0; border-radius:12px; overflow:hidden;"
+        f"""
+        <iframe src="https://<tu-usuario>.github.io/malaga-weather-widget/?v={bust}"
+                style="width:100%;height:240px;border:0;border-radius:12px;overflow:hidden;"
                 loading="lazy"></iframe>
         """,
         unsafe_allow_html=True,
     )
-
-# Alias por compatibilidad con versiones anteriores
-def render_weather_widget():
-    return render_weather()
