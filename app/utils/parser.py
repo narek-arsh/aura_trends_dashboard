@@ -14,9 +14,9 @@ def load_feeds(path="config/feeds.yaml"):
             print("[❌] feeds.yaml está vacío.")
             return {}
         if isinstance(cfg, dict) and "feeds" in cfg and isinstance(cfg["feeds"], dict):
-            return cfg["feeds"]  # formato recomendado
+            return cfg["feeds"]
         if isinstance(cfg, dict) and all(isinstance(v, list) for v in cfg.values()):
-            return cfg          # formato plano (retrocompatibilidad)
+            return cfg
         print("[❌] Formato de feeds.yaml no reconocido. Revisa la indentación.")
         return {}
     except Exception as e:
