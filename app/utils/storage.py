@@ -32,11 +32,10 @@ def is_saved(art_id: str) -> bool:
 
 def toggle_save(article: Dict) -> bool:
     """
-    Alterna guardado. Devuelve True si queda guardado tras la operación,
-    False si se elimina de guardados.
+    Alterna guardado. Devuelve True si queda guardado, False si se elimina.
     """
     saved = get_saved()
-    idx = next((i for i, a in enumerate(saved) if a.get("id") == article.get("id")), None)
+    idx = next((i for i, a in enumerate(saved) if a.get("id")==article.get("id")), None)
     if idx is None:
         saved.append(article)
         _save_json(SAVED_PATH, saved)
