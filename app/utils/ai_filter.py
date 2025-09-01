@@ -3,6 +3,9 @@ import time
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, DeadlineExceeded, ServiceUnavailable
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Carga de claves (múltiples): GEMINI_API_KEYS="K1,K2,K3" y fallback GEMINI_API_KEY
+# ─────────────────────────────────────────────────────────────────────────────
 def _load_api_keys():
     keys = []
     raw = os.getenv("GEMINI_API_KEYS", "")
@@ -17,13 +20,18 @@ def _load_api_keys():
             out.append(k)
     return out
 
-_ACTIVE_KEYS = _load_api_keys()
-print(f"🔑 Claves Gemini detectadas: {len(_ACTIVE_KEYS)}")
+_API_KEYS = _load_api_keys()
+print(f"🔑 Claves Gemini detectadas: {len(_API_KEYS)}")
 
 def _configure_with_key(key: str):
     genai.configure(api_key=key)
 
 def _pause_seconds() -> float:
+    """
+    Cadencia MUY prudente por defecto: 12s. Ajustable con:
+      - GEMINI_SECONDS_PER_CALL (segundos)
+      - GEMINI_RPM_PER_KEY (rpm -> 60/rpm)
+    """
     val = os.getenv("GEMINI_SECONDS_PER_CALL", "").strip()
     if val:
         try:
@@ -38,7 +46,7 @@ def _pause_seconds() -> float:
                 return max(60.0 / r, 2.0)
         except:
             pass
-    return 12.0  # MUY prudente
+    return 12.0
 
 def _is_invalid_key_error(err: Exception) -> bool:
     msg = str(err).lower()
@@ -53,14 +61,74 @@ def _try_generate(prompt: str) -> str:
     resp = model.generate_content(prompt)
     return (resp.text or "").strip()
 
-def _generate_with_rotation(prompt: str) -> str:
+def _generate_single_pass(prompt: str) -> str:
     """
-    Reintenta el MISMO prompt rotando claves:
-    - 429 (quota) → rota a la siguiente y reintenta MISMO artículo.
-    - 400 (key inválida/expirada) → elimina la key y sigue con el MISMO artículo.
-    - Timeouts/503 → breve backoff y reintento en misma key.
-    - Si todas sin cuota o inválidas → ResourceExhausted.
+    PRUEBA CADA CLAVE 1 VEZ (en orden) PARA EL MISMO ARTÍCULO.
+    - 429 (cuota): intenta la siguiente clave.
+    - 400 (key inválida/expirada): salta esa clave y prueba la siguiente.
+    - Timeout/503: pasa a la siguiente clave.
+    - Si ninguna clave responde: lanza ResourceExhausted para que trend_probe.py GUARDE Y PARE.
     """
+    if not _API_KEYS:
+        raise ResourceExhausted("No hay claves válidas configuradas.")
+    pause = _pause_seconds()
+
+    for idx, key in enumerate(_API_KEYS, start=1):
+        _configure_with_key(key)
+        if idx > 1:
+            time.sleep(1.0)  # respiro al cambiar de key
+        try:
+            text = _try_generate(prompt)
+            time.sleep(pause)
+            return text
+        except ResourceExhausted:
+            print(f"⛽ Clave #{idx} agotada (429). Probando la siguiente…")
+            continue
+        except (DeadlineExceeded, ServiceUnavailable) as e:
+            print(f"🌐 Error transitorio con clave #{idx}: {e}. Probando la siguiente…")
+            continue
+        except Exception as e:
+            if _is_invalid_key_error(e):
+                print(f"⛔ Clave #{idx} inválida/expirada. Saltando…")
+                continue
+            # Otro error no clasificable → devolvemos vacío (el caller marcará False)
+            print(f"❗ Error genérico con clave #{idx}: {e} → marcar False y seguir con el siguiente ARTÍCULO")
+            time.sleep(pause)
+            return ""
+
+    # Ninguna clave pudo responder este artículo → que el caller guarde y corte
+    raise ResourceExhausted("Todas las claves agotadas/invalidas para este artículo.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API pública
+# ─────────────────────────────────────────────────────────────────────────────
+def is_relevant_for_aura(article: dict) -> bool:
+    """
+    True/False según relevancia.
+    - Intenta el MISMO artículo con cada clave (una vez).
+    - Si todas están agotadas/invalidas → ResourceExhausted (trend_probe.py guardará y parará).
+    - En errores no críticos → False (conservador).
+    """
+    prompt = f"""
+Eres curador de tendencias para un hotel de lujo lifestyle (ME by Meliá, Málaga).
+¿Esta noticia puede servir para conversación/experiencia (moda, arte, gastronomía, lifestyle, bienestar, lujo, cultura, eventos)?
+Responde SOLO con: true  o  false
+
+Título: {article.get('title','')}
+Resumen: {article.get('summary','')}
+Categoría: {article.get('category','')}
+Enlace: {article.get('link','')}
+""".strip()
+
+    text = _generate_single_pass(prompt).lower()
+    if "true" in text:
+        return True
+    if "false" in text:
+        return False
+    if text == "":
+        return False
+    print(f"[IA] Respuesta inesperada: {text!r}")
+    return False    """
     global _ACTIVE_KEYS
     if not _ACTIVE_KEYS:
         raise ResourceExhausted("No hay claves válidas configuradas.")
