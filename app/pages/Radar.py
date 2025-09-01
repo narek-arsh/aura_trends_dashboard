@@ -2,7 +2,10 @@ import json
 import streamlit as st
 from app.components.filters import category_filter
 from app.components.card import render_article
-from app.components.weather import render_weather  # <- ahora existe
+from app.components.weather import render_weather
+from app.utils.storage import get_saved
+
+st.set_page_config(page_title="Radar", layout="wide")
 
 def _load_trends(path: str = "data/trends.json"):
     try:
@@ -14,16 +17,16 @@ def _load_trends(path: str = "data/trends.json"):
 
 def main():
     st.title("Radar")
-
-    # Widget tiempo en el encabezado
     render_weather()
 
     selected = category_filter()
-    articles = _load_trends()
-
-    if selected:
-        s = selected.lower()
-        articles = [a for a in articles if (a.get("category") or "").lower() == s]
+    if selected == "guardadas":
+        articles = get_saved()
+    else:
+        articles = _load_trends()
+        if selected and selected != "todas":
+            s = selected.lower()
+            articles = [a for a in articles if (a.get("category") or "").lower() == s]
 
     if not articles:
         st.info("Aún no hay artículos para mostrar. Cuando el colector procese nuevos, aparecerán aquí.")
