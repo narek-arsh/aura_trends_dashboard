@@ -6,7 +6,7 @@ on:
     - cron: "0 6 * * *"   # cada día a las 06:00 UTC
 
 permissions:
-  contents: write   # necesario para git push
+  contents: write   # necesario para poder hacer git push
 
 jobs:
   collect:
@@ -17,8 +17,11 @@ jobs:
       GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
       GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
 
-      # 🐢 Ritmo MUY prudente (ajusta aquí sin tocar código)
-      GEMINI_SECONDS_PER_CALL: "12"   # 12s por llamada y por clave ≈ 5 rpm/clave
+      # 🐢 Ritmo MUY prudente (ajústalo sin tocar código)
+      GEMINI_SECONDS_PER_CALL: "12"   # 12s por llamada/clave ≈ 5 rpm por proyecto
+      # GEMINI_RPM_PER_KEY: "5"       # alternativa a la línea de arriba
+
+      # 📉 Límites conservadores
       PER_CATEGORY_LIMIT: "30"
       MAX_TOTAL_ARTICLES: "120"
 
@@ -41,7 +44,7 @@ jobs:
       - name: Run trend collector
         run: python trend_probe.py
 
-      # Sube los JSON como artifact descargable desde la página del run
+      # (Opcional pero MUY útil) Artefactos para descargar los JSON desde la página del run
       - name: Upload JSONs as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -49,8 +52,8 @@ jobs:
           path: data/*.json
           if-no-files-found: warn
 
-      # Commit & push sólo si hay cambios
-          - name: Commit & push changes if any
+      # Commit & push solo si hay cambios, con shell robusto
+      - name: Commit & push changes if any
         shell: bash
         run: |
           set -euo pipefail
