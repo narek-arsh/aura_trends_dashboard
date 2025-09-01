@@ -1,9 +1,13 @@
 import os
 import time
 import json
+import re
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, DeadlineExceeded, ServiceUnavailable
 
+# ─────────────────────────────────────────────────────────────
+# Gestión de claves y ritmo
+# ─────────────────────────────────────────────────────────────
 def _load_api_keys():
     keys = []
     raw = os.getenv("GEMINI_API_KEYS", "")
@@ -25,20 +29,7 @@ def _configure_with_key(key: str):
     genai.configure(api_key=key)
 
 def _pause_seconds() -> float:
-    val = os.getenv("GEMINI_SECONDS_PER_CALL", "").strip()
-    if val:
-        try:
-            return max(float(val), 2.0)
-        except:
-            pass
-    rpm = os.getenv("GEMINI_RPM_PER_KEY", "").strip()
-    if rpm:
-        try:
-            r = float(rpm)
-            if r > 0:
-                return max(60.0 / r, 2.0)
-        except:
-            pass
+    # Fijamos 12s para ir muy por debajo del límite
     return 12.0
 
 def _is_invalid_key_error(err: Exception) -> bool:
@@ -49,6 +40,9 @@ def _is_invalid_key_error(err: Exception) -> bool:
         or ("400" in msg and "api key" in msg and "invalid" in msg)
     )
 
+# ─────────────────────────────────────────────────────────────
+# Llamada base a Gemini
+# ─────────────────────────────────────────────────────────────
 def _try_generate(prompt: str) -> str:
     model = genai.GenerativeModel("gemini-1.5-flash")
     resp = model.generate_content(prompt)
@@ -56,8 +50,8 @@ def _try_generate(prompt: str) -> str:
 
 def _generate_single_pass(prompt: str) -> str:
     """
-    Try each key once (in order) for the same article.
-    If all keys fail (429 or invalid), raise ResourceExhausted to let caller save & stop.
+    Prueba cada clave en orden, máximo una vez.
+    Si todas fallan → ResourceExhausted.
     """
     if not _API_KEYS:
         raise ResourceExhausted("No valid API keys configured.")
@@ -66,7 +60,7 @@ def _generate_single_pass(prompt: str) -> str:
     for idx, key in enumerate(_API_KEYS, start=1):
         _configure_with_key(key)
         if idx > 1:
-            time.sleep(1.0)  # small breath when switching keys
+            time.sleep(1.0)  # respiro al cambiar de clave
         try:
             text = _try_generate(prompt)
             time.sleep(pause)
@@ -81,22 +75,54 @@ def _generate_single_pass(prompt: str) -> str:
             if _is_invalid_key_error(e):
                 print(f"⛔ Key #{idx} invalid/expired. Skipping…")
                 continue
-            print(f"❗ Generic error with key #{idx}: {e} → returning empty")
+            print(f"❗ Error genérico con clave #{idx}: {e} → devolviendo vacío")
             time.sleep(pause)
             return ""
 
     raise ResourceExhausted("All keys exhausted or invalid for this article.")
 
-def is_relevant_for_aura(article: dict) -> bool:
-    prompt = f"""
-You are a trends curator for a luxury lifestyle hotel (ME by Meliá, Málaga).
-Is this news useful for guest conversation or experiences (fashion, art, gastronomy, lifestyle, wellness, luxury, culture, events)?
-Answer ONLY with: true  or  false
+# ─────────────────────────────────────────────────────────────
+# Helpers de parsing
+# ─────────────────────────────────────────────────────────────
+_JSON_BLOCK_RX = re.compile(r"\{[\s\S]*\}", re.MULTILINE)
 
-Title: {article.get('title','')}
-Summary: {article.get('summary','')}
-Category: {article.get('category','')}
-Link: {article.get('link','')}
+def _extract_json_block(s: str) -> str:
+    s = (s or "").strip()
+    if not s:
+        return ""
+    if s.startswith("```"):
+        s = s.strip("`")
+        if s.lower().startswith("json"):
+            s = s[4:].lstrip("\n\r ")
+    m = _JSON_BLOCK_RX.search(s)
+    return m.group(0).strip() if m else s
+
+# ─────────────────────────────────────────────────────────────
+# Clasificación (ES, prompt ligero)
+# ─────────────────────────────────────────────────────────────
+def is_relevant_for_aura(article: dict) -> bool:
+    title = article.get('title','')
+    summary = article.get('summary','')
+    category = article.get('category','')
+    link = article.get('link','')
+
+    prompt = f"""
+Eres curador de tendencias para ME by Meliá (Málaga).
+Evalúa si esta noticia sirve para conversar con huéspedes o inspirar experiencias.
+
+Di **true** solo si:
+- Habla de Málaga, Costa del Sol, Andalucía o España (eventos, cultura, gastronomía, lifestyle, aperturas).
+- O trata de marcas/tendencias de lujo internacionales de alto nivel (ej. Dior, LV, Hermès, Chanel, Michelin, 50 Best).
+- O muestra novedades en gastronomía, wellness, arte o diseño aplicables a hoteles de lujo.
+
+Di **false** si es demasiado local en otra ciudad, corporativo/financiero sin interés para huéspedes, o ajeno a lujo/experiencias.
+
+Responde SOLO: true  o  false.
+
+Título: {title}
+Resumen: {summary}
+Categoría: {category}
+Enlace: {link}
 """.strip()
 
     text = _generate_single_pass(prompt).lower()
@@ -109,39 +135,59 @@ Link: {article.get('link','')}
     print(f"[IA] Unexpected response: {text!r}")
     return False
 
+# ─────────────────────────────────────────────────────────────
+# Enriquecimiento (ES)
+# ─────────────────────────────────────────────────────────────
 def enrich_article_fields(article: dict) -> dict:
-    """Return {'why_it_matters': str, 'activation_ideas': [str, ...]} or {} on failure."""
+    title = article.get('title','')
+    summary = article.get('summary','')
+    category = article.get('category','')
+    link = article.get('link','')
+
     prompt = f"""
-You are a trends concierge for a luxury lifestyle hotel in Málaga (ME by Meliá).
-Given the news item, write:
-- A concise 2-3 sentence 'why_it_matters' tailored to a guest conversation.
-- 3 short 'activation_ideas' (max 12 words each), practical, hotel-host friendly.
+Eres “Aura Host” en ME by Meliá (Málaga). Te paso una noticia y quiero:
 
-Return STRICT JSON with keys: why_it_matters (string), activation_ideas (array of strings). No prose before/after.
+1) "why_it_matters": 2–3 frases concisas (máx. 280 caracteres), en español,
+   que expliquen por qué interesa a un huésped de lujo.
+   - Si es de Málaga/España → destaca valor inmediato para la estancia.
+   - Si es global → preséntala como tendencia de lujo reconocible.
 
-Title: {article.get('title','')}
-Summary: {article.get('summary','')}
-Category: {article.get('category','')}
-Link: {article.get('link','')}
+2) "activation_ideas": 3 frases cortas en español (máx. 12 palabras),
+   cada una empezando con un verbo (ej. "Recomendar…", "Sugerir…", "Invitar a…").
+   - Si es local → aplicables en Málaga o dentro del hotel.
+   - Si es global → sirven como conversación o inspiración en el servicio.
+
+Devuelve SOLO JSON válido:
+
+{{
+  "why_it_matters": "texto breve en español",
+  "activation_ideas": ["frase 1", "frase 2", "frase 3"]
+}}
+
+Título: {title}
+Resumen: {summary}
+Categoría: {category}
+Enlace: {link}
 """.strip()
 
     try:
         raw = _generate_single_pass(prompt)
         if not raw:
             return {}
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`")
-            if "json" in raw[:10].lower():
-                raw = raw.split("\n", 1)[1] if "\n" in raw else raw
-        data = json.loads(raw)
+
+        block = _extract_json_block(raw)
+        data = json.loads(block)
+
         out = {}
         w = data.get("why_it_matters")
         if isinstance(w, str) and w.strip():
             out["why_it_matters"] = w.strip()
+
         ideas = data.get("activation_ideas")
         if isinstance(ideas, list):
-            out["activation_ideas"] = [str(x).strip() for x in ideas if str(x).strip()][:5]
+            cleaned = [str(x).strip() for x in ideas if str(x).strip()]
+            out["activation_ideas"] = cleaned[:5]
+
         return out
     except ResourceExhausted:
         raise
