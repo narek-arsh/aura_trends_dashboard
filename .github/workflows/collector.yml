@@ -3,14 +3,18 @@ name: Collect Trends
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8,18 * * *"  # Ejecuta el script a las 08:00 y 18:00 UTC
+    - cron: "0 8,18 * * *"
 
 jobs:
   collect:
     runs-on: ubuntu-latest
 
     env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # ✅ Inyectamos el secreto como variable de entorno
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}   # "KEY1,KEY2,KEY3"
+      GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}    # (opcional: fallback)
+      # (Opcional) Ajusta ritmo:
+      # GEMINI_SECONDS_PER_CALL: "10"     # 10s por petición y por clave (muy conservador)
+      # GEMINI_RPM_PER_KEY: "6"           # 6 peticiones/minuto por clave
 
     steps:
       - name: Checkout repository
