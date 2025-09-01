@@ -26,7 +26,6 @@ def _extract_image_and_text(summary_html: str):
 
         return img_url, text
     except Exception:
-        # fallback duro si el HTML venía roto
         return None, summary_html
 
 def render_article(article: dict):
@@ -55,12 +54,11 @@ def render_article(article: dict):
         col_img, col_txt = st.columns([1, 2], gap="large")
         with col_img:
             if img_url:
-                st.image(img_url, use_column_width=True)
+                st.image(img_url, use_container_width=True)  # ← actualizado
         with col_txt:
             if short_text:
                 st.write(short_text)
 
-        # Campos de enriquecimiento (si los añades más adelante desde la IA)
         why = article.get("why_it_matters")
         ideas = article.get("activation_ideas")
         if why:
