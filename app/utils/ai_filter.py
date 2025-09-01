@@ -112,6 +112,58 @@ Link: {article.get('link','')}
     if text == "":
         return False
     print(f"[IA] Unexpected response: {text!r}")
+    return False    """
+    if not _API_KEYS:
+        raise ResourceExhausted("No valid API keys configured.")
+    pause = _pause_seconds()
+
+    for idx, key in enumerate(_API_KEYS, start=1):
+        _configure_with_key(key)
+        if idx > 1:
+            time.sleep(1.0)  # short break when switching keys
+        try:
+            text = _try_generate(prompt)
+            time.sleep(pause)
+            return text
+        except ResourceExhausted:
+            print(f"⛽ Key #{idx} quota exhausted (429). Trying next…")
+            continue
+        except (DeadlineExceeded, ServiceUnavailable) as e:
+            print(f"🌐 Transient error with key #{idx}: {e}. Trying next…")
+            continue
+        except Exception as e:
+            if _is_invalid_key_error(e):
+                print(f"⛔ Key #{idx} invalid/expired. Skipping…")
+                continue
+            print(f"❗ Generic error with key #{idx}: {e} → mark False and continue to next ARTICLE")
+            time.sleep(pause)
+            return ""
+
+    raise ResourceExhausted("All keys exhausted or invalid for this article.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
+def is_relevant_for_aura(article: dict) -> bool:
+    prompt = f"""
+You are a trends curator for a luxury lifestyle hotel (ME by Meliá, Málaga).
+Is this news useful for guest conversation or experiences (fashion, art, gastronomy, lifestyle, wellness, luxury, culture, events)?
+Answer ONLY with: true  or  false
+
+Title: {article.get('title','')}
+Summary: {article.get('summary','')}
+Category: {article.get('category','')}
+Link: {article.get('link','')}
+""".strip()
+
+    text = _generate_single_pass(prompt).lower()
+    if "true" in text:
+        return True
+    if "false" in text:
+        return False
+    if text == "":
+        return False
+    print(f"[IA] Unexpected response: {text!r}")
     return False    - 400 (key inválida/expirada): salta esa clave y prueba la siguiente.
     - Timeout/503: pasa a la siguiente clave.
     - Si ninguna clave responde: lanza ResourceExhausted.
