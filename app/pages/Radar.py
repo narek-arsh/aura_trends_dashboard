@@ -5,7 +5,7 @@ from app.components.card import render_article
 from app.components.weather import render_weather
 from app.utils.storage import get_saved
 
-st.set_page_config(page_title="Radar", layout="wide")
+st.set_page_config(page_title="Aura Dashboard", layout="wide")
 
 def _load_trends(path: str = "data/trends.json"):
     try:
