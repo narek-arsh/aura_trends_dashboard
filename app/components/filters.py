@@ -1,11 +1,14 @@
 import streamlit as st
-import yaml
 
-def render_filters():
-    with open("config/categories.yaml", "r", encoding="utf-8") as f:
-        categories = yaml.safe_load(f)
+CATEGORIES = ["todas", "moda", "gastronomia", "arte_cultura", "lifestyle", "malaga"]
 
-    category_names = ["Todas"] + categories
-    selected = st.radio("Filtrar por categoría", category_names, horizontal=True)
-    return selected
-# Filtros por categoría
+def category_filter():
+    st.markdown("**Filtrar por categoría**")
+    selected = st.radio(
+        label="",
+        options=CATEGORIES,
+        horizontal=True,
+        index=0,
+        label_visibility="collapsed",
+    )
+    return None if selected == "todas" else selected
