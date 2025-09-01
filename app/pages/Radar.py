@@ -22,7 +22,7 @@ def _columns(spec):
         return st.columns(spec)
 
 def main():
-    st.title("Radar")
+    st.title("Aura Dashboard")
     render_weather()
 
     selected = category_filter()  # siempre string por filters.py
