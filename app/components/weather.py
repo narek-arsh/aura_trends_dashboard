@@ -1,7 +1,9 @@
-import time, streamlit as st
+import time
+import streamlit as st
 
 def render_weather():
-    bust = int(time.time())  # cambia cada deploy; si prefieres fijo, usa ?v=2
+    # Cache buster → cambia cada ejecución para forzar refresco
+    bust = int(time.time())
     st.markdown(
         f"""
         <iframe src="https://<tu-usuario>.github.io/malaga-weather-widget/?v={bust}"
