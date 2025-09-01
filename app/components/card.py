@@ -22,6 +22,18 @@ def _extract_image_and_text(summary_html: str):
 def _safe_key(s: str) -> str:
     return md5(s.encode("utf-8")).hexdigest()
 
+def _columns(spec):
+    """
+    Crea columnas con soporte para versiones antiguas de Streamlit
+    que no aceptan el parámetro 'gap'.
+    """
+    try:
+        # Streamlit recientes
+        return st.columns(spec, gap="large")
+    except TypeError:
+        # Versiones sin 'gap'
+        return st.columns(spec)
+
 def render_article(article: dict):
     title = article.get("title", "Sin título")
     category = article.get("category") or "Sin categoría"
@@ -39,7 +51,7 @@ def render_article(article: dict):
         st.markdown(f"### {title}")
         st.caption(f"**Categoría:** {category}")
 
-        col_img, col_txt = st.columns([1, 2], gap="large")
+        col_img, col_txt = _columns([1, 2])  # ← usa helper con fallback
         with col_img:
             if img_url:
                 st.image(img_url, use_container_width=True)
@@ -57,7 +69,6 @@ def render_article(article: dict):
             for it in ideas:
                 st.write(f"• {it}")
 
-        # Botón Guardar / Quitar
         saved_now = is_saved(art_id)
         btn_label = "⭐ Guardar" if not saved_now else "❌ Quitar de guardadas"
         if st.button(btn_label, key=f"save_{art_key}"):
