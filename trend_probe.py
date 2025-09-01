@@ -30,7 +30,7 @@ if os.path.exists(CURATED_PATH):
     with open(CURATED_PATH, "r", encoding="utf-8") as f:
         curated_articles = json.load(f)
 else:
-    curated_articles = {}
+    curated_articles = []
 
 # Empezamos a filtrar
 nuevos = 0
