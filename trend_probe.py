@@ -9,7 +9,7 @@ DATA_DIR = "data"
 CURATED_PATH = os.path.join(DATA_DIR, "curated.json")
 TRENDS_PATH  = os.path.join(DATA_DIR, "trends.json")
 
-# Límites por entorno (opcionales, con defaults conservadores)
+# Límites por entorno (con defaults prudentes)
 PER_CATEGORY_LIMIT = int(os.getenv("PER_CATEGORY_LIMIT", "30"))
 MAX_TOTAL_ARTICLES = int(os.getenv("MAX_TOTAL_ARTICLES", "120"))
 
@@ -58,7 +58,6 @@ if not feeds_by_category:
 print(f"[+] Recogiendo artículos (por categoría: {PER_CATEGORY_LIMIT})…", flush=True)
 articles = fetch_articles_from_feeds(feeds_by_category, per_category=PER_CATEGORY_LIMIT)
 
-# Limitar total si se desea
 if len(articles) > MAX_TOTAL_ARTICLES:
     articles = articles[:MAX_TOTAL_ARTICLES]
 
@@ -83,7 +82,7 @@ for idx, art in enumerate(articles, start=1):
     print(f"[{idx}/{total}] [IA] Evaluando: {title[:90]}", flush=True)
 
     try:
-        is_rel = is_relevant_for_aura(art)   # rota claves y deja pasar 429 si todas se agotan
+        is_rel = is_relevant_for_aura(art)
         curated[art_id] = bool(is_rel)
         if is_rel:
             trends.append(art)
@@ -103,13 +102,10 @@ for idx, art in enumerate(articles, start=1):
         print(f"[{idx}/{total}] [!] Error con el artículo: {e}", flush=True)
         curated[art_id] = False
 
-    # Guardado incremental tras cada artículo
     _save_json(CURATED_PATH, curated)
     _save_json(TRENDS_PATH, trends)
 
-# Resumen en logs (para comprobar que no están vacíos)
 print(f"[ℹ] Resumen guardado: curated={len(curated)} entradas, trends={len(trends)} relevantes", flush=True)
 print(f"[ℹ] Ejemplos curated (hasta 3): {list(curated)[:3]}", flush=True)
 print(f"[ℹ] Ejemplos trends (hasta 1): {trends[:1]}", flush=True)
-
 print(f"[✅] Proceso completado. Nuevos procesados: {procesados_nuevos}", flush=True)
