@@ -1,6 +1,6 @@
 import streamlit as st
 
-CATEGORIES = ["todas", "moda", "gastronomia", "arte_cultura", "lifestyle", "malaga"]
+CATEGORIES = ["todas", "moda", "gastronomia", "arte_cultura", "lifestyle", "malaga", "guardadas"]
 
 def category_filter():
     st.markdown("**Filtrar por categoría**")
@@ -11,4 +11,4 @@ def category_filter():
         index=0,
         label_visibility="collapsed",
     )
-    return None if selected == "todas" else selected
+    return selected  # incluye 'guardadas'
