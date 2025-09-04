@@ -7,6 +7,7 @@ from app.utils.storage import get_saved
 
 st.set_page_config(page_title="Aura Dashboard", layout="wide")
 
+
 def _load_trends(path: str = "data/trends.json"):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -15,17 +16,19 @@ def _load_trends(path: str = "data/trends.json"):
     except Exception:
         return []
 
+
 def _columns(spec):
     try:
         return st.columns(spec, gap="large")
     except TypeError:
         return st.columns(spec)
 
+
 def main():
     st.title("Aura Dashboard")
     render_weather()
 
-    selected = category_filter()  # siempre string por filters.py
+    selected = category_filter()  # Siempre es string, por filters.py
     if selected == "guardadas":
         articles = get_saved()
     else:
@@ -34,11 +37,11 @@ def main():
             s = (selected or "todas").lower()
             articles = [a for a in articles if (a.get("category") or "").lower() == s]
 
-        if not articles:
+    if not articles:
         st.info("Aún no hay artículos para mostrar. Cuando el colector procese nuevos, aparecerán aquí.")
         return
 
-    # Mostrar primero las noticias más recientes
+    # Ordenar para que lo más reciente aparezca primero
     articles = list(reversed(articles))
 
     left, right = _columns(2)
