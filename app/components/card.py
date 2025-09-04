@@ -48,13 +48,20 @@ def render_article(article: dict):
     short_text = (clean_text[:max_chars] + "…") if len(clean_text) > max_chars else clean_text
 
     with st.container(border=True):
-        st.markdown(f"### {title}")
+        # ✅ Título clicable
+        st.markdown(f"### [{title}]({link})", unsafe_allow_html=True)
+
         st.caption(f"**Categoría:** {category}")
 
-        col_img, col_txt = _columns([1, 2])  # ← usa helper con fallback
+        col_img, col_txt = _columns([1, 2])
         with col_img:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                # ✅ Imagen clicable
+                st.markdown(
+                    f'<a href="{link}" target="_blank"><img src="{img_url}" style="width:100%; border-radius:8px;"/></a>',
+                    unsafe_allow_html=True
+                )
+
         with col_txt:
             if short_text:
                 st.write(short_text)
