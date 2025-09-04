@@ -34,9 +34,12 @@ def main():
             s = (selected or "todas").lower()
             articles = [a for a in articles if (a.get("category") or "").lower() == s]
 
-    if not articles:
+        if not articles:
         st.info("Aún no hay artículos para mostrar. Cuando el colector procese nuevos, aparecerán aquí.")
         return
+
+    # Mostrar primero las noticias más recientes
+    articles = list(reversed(articles))
 
     left, right = _columns(2)
     for i, art in enumerate(articles):
